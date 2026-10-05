@@ -201,21 +201,39 @@ body.touch .touch { display: block; }
   touch-action: none;
 }
 .tbtn:active, .tbtn.on { background: rgba(87, 232, 255, 0.22); border-color: var(--cyan); transform: scale(0.94); }
+
+/* launch sits under the left thumb, the fight buttons stack under the right.
+   Widths are chosen so no two circles overlap down to a 360px viewport. */
+.tcluster { position: absolute; inset: 0; pointer-events: none; }
 .tbtn.launch {
-  right: 50%; transform: translateX(50%);
-  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 4px);
-  width: 96px; height: 96px; font-size: 13px;
+  left: 50%; margin-left: -40px;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  width: 80px; height: 80px; font-size: 12px;
   border-color: rgba(87, 232, 255, 0.5); color: #dffaff;
   box-shadow: 0 0 26px rgba(87, 232, 255, 0.18), inset 0 0 20px rgba(87, 232, 255, 0.1);
 }
-.tbtn.launch:active, .tbtn.launch.on { transform: translateX(50%) scale(0.94); }
-.tcluster { position: absolute; inset: auto 0 0 auto; }
-.tbtn.fire { right: max(18px, env(safe-area-inset-right)); bottom: calc(max(24px, env(safe-area-inset-bottom)) + 108px); width: 78px; height: 78px; border-color: rgba(255, 138, 77, 0.5); color: #ffe0cc; }
-.tbtn.msl { right: calc(max(18px, env(safe-area-inset-right)) + 96px); bottom: calc(max(24px, env(safe-area-inset-bottom)) + 40px); width: 62px; height: 62px; border-color: rgba(169, 123, 255, 0.5); color: #e7d9ff; }
-.tbtn.boost { right: calc(max(18px, env(safe-area-inset-right)) + 22px); bottom: calc(max(24px, env(safe-area-inset-bottom)) + 190px); width: 62px; height: 62px; border-color: rgba(75, 240, 180, 0.5); color: #ccfff0; }
+.tbtn.launch:active, .tbtn.launch.on { transform: scale(0.94); }
+.tbtn.fire {
+  right: calc(14px + env(safe-area-inset-right));
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  width: 72px; height: 72px;
+  border-color: rgba(255, 138, 77, 0.5); color: #ffe0cc;
+}
+.tbtn.msl {
+  right: calc(14px + env(safe-area-inset-right));
+  bottom: calc(100px + env(safe-area-inset-bottom));
+  width: 56px; height: 56px; font-size: 10px;
+  border-color: rgba(169, 123, 255, 0.5); color: #e7d9ff;
+}
+.tbtn.boost {
+  right: calc(78px + env(safe-area-inset-right));
+  bottom: calc(100px + env(safe-area-inset-bottom));
+  width: 56px; height: 56px; font-size: 10px;
+  border-color: rgba(75, 240, 180, 0.5); color: #ccfff0;
+}
 body.touch .tip { display: none; }
-body.touch .vitals { width: 132px; }
-body.touch .score { font-size: clamp(26px, 5vh, 40px); }
+body.touch .keys { display: none; }
+body.touch .legend { margin-top: 18px; }
 
 /* ---------------- screens ---------------- */
 .screen {
@@ -313,7 +331,32 @@ kbd {
 }
 @media (max-width: 460px) {
   .title { letter-spacing: 0.15em; }
-  .vitals { width: 128px; }
   .result { gap: 12px 18px; }
   .value { font-size: 34px; }
+}
+
+/* Compact cockpit layout: on narrow or short viewports the top strip cannot
+   hold the score and the vitals at once. Vitals drop into the left column,
+   the radar moves to the top-left, and the threat block stacks beneath the
+   system buttons instead of colliding with them. */
+@media (max-width: 760px), (max-height: 540px) {
+  .vitals {
+    top: auto;
+    bottom: calc(112px + env(safe-area-inset-bottom));
+    left: 12px;
+    width: 120px;
+    gap: 5px;
+  }
+  .gauge { height: 13px; }
+  .weapons { bottom: calc(16px + env(safe-area-inset-bottom)); left: 12px; gap: 12px; }
+  .ammo b { font-size: 16px; }
+  .mods { flex-wrap: wrap; max-width: 160px; gap: 4px; }
+  .score-wrap { top: calc(6px + env(safe-area-inset-top)); }
+  .score { font-size: clamp(24px, 5.4vh, 38px); }
+  .best { font-size: 9px; letter-spacing: 0.2em; }
+  .combo { padding: 2px 9px; font-size: 9px; }
+  .sys { top: calc(10px + env(safe-area-inset-top)); right: 10px; }
+  .sysbtn { width: 34px; height: 34px; }
+  .tac { top: calc(52px + env(safe-area-inset-top)); right: 10px; gap: 4px; }
+  .target { max-width: 150px; font-size: 9px; }
 }

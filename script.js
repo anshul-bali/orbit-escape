@@ -405,11 +405,12 @@ class Turret {
     this.track();
     if (this.flash > 0) this.flash = Math.max(0, this.flash - dt * 4);
     const s = game.ship;
-    const d = s.alive ? dst(this.x, this.y, s.x, s.y) : 1e9;
+    const fighting = game.state === 'play';
+    const d = (s.alive && fighting) ? dst(this.x, this.y, s.x, s.y) : 1e9;
     const want = Math.atan2(s.y - this.y, s.x - this.x);
     this.rot = angLerp(this.rot, want, Math.min(1, dt * 2.6));
     this.cd -= dt;
-    if (d < 640 && this.cd <= 0 && game.lineOfSight(this.x, this.y, s.x, s.y)) {
+    if (fighting && d < 640 && this.cd <= 0 && game.lineOfSight(this.x, this.y, s.x, s.y)) {
       this.cd = rand(1.5, 2.4);
       const err = rand(-0.09, 0.09);
       const a = this.rot + err;
@@ -539,6 +540,7 @@ class Planet {
   }
   /* enemy worlds put ships into the field when the player closes in */
   spawnLogic(dt, game) {
+    if (game.state !== 'play') return;
     if (!this.hostile || game.enemies.length >= game.enemyCap()) return;
     const d = dst(this.x, this.y, game.ship.x, game.ship.y);
     this.enemySpawnCd -= dt;
@@ -951,7 +953,7 @@ class Enemy {
     /* carrier keeps feeding the fight */
     if (this.type === 'carrier') {
       this.launchCd -= dt;
-      if (this.launchCd <= 0 && dp < 1100) {
+      if (this.launchCd <= 0 && dp < 1100 && game.state === 'play') {
         this.launchCd = rand(5, 8);
         if (game.enemies.length < game.enemyCap() + 2) {
           const e = game.spawnEnemy(this.home || null, 'scout', this.x, this.y);
@@ -972,7 +974,7 @@ class Enemy {
     }
   }
   fire(dt, game, a, dp) {
-    if (!this.T.shot) return;
+    if (!this.T.shot || game.state !== 'play') return;
     this.fireCd -= dt;
     if (this.fireCd > 0 || dp > this.range * 1.5) return;
     this.fireCd = this.T.rate * rand(0.8, 1.25);
@@ -1204,9 +1206,9 @@ class Ship {
     /* A/D scrubs the orbit so launch timing is controllable */
     const scrub = (IN.keys.KeyD ? 1 : 0) - (IN.keys.KeyA ? 1 : 0);
     this.angle += (this.dir * (this.orbitLinear / this.orbitR) + scrub * 1.5) * dt;
-    /* W/S edge in and out along the ring */
+    /* W/S edge in and out along the ring, but never into the planet body */
     const rad = (IN.keys.KeyS ? 1 : 0) - (IN.keys.KeyW ? 1 : 0);
-    if (rad) this.orbitR = clamp(this.orbitR + rad * 70 * dt, p.r + 14, p.captureR * 0.96);
+    if (rad) this.orbitR = clamp(this.orbitR + rad * 70 * dt, p.r + 26, p.orbitR * 1.22);
     this.syncToOrbit();
     this.fuel = clamp(this.fuel - CFG.fuelIdle * dt, 0, 100);
     if (p.faction === 'danger') this.hurt(6 * dt, 'radiation', this.x, this.y, true);
@@ -1348,6 +1350,7 @@ class Ship {
   }
   updateWeapons(dt) {
     const g = this.game;
+    if (g.state !== 'play') { this.lockT = 0; this.lockReady = false; return; }
     if (this.fireCd > 0) this.fireCd -= dt;
     if (this.mslCd > 0) this.mslCd -= dt;
     /* primary cannon */
@@ -2498,19 +2501,21 @@ class Game {
       for (let i = 0; i < 5; i++) html += '<i class="' + (i < this.threat ? 'on' : '') + '"></i>';
       dom.threatPips.innerHTML = html;
     }
-    /* current target readout */
+    /* current target readout — built once, then only patched on change */
     const t = s.lockTarget && s.lockTarget.alive ? s.lockTarget : this.nearestEnemy(s.x, s.y, 900);
     if (t) {
+      if (!this._tgtEl) {
+        dom.target.innerHTML = '<span></span><i><b></b></i>';
+        this._tgtEl = dom.target.querySelector('span');
+        this._tgtBar = dom.target.querySelector('b');
+      }
       dom.target.classList.add('on');
-      const pct = clamp(t.hp / t.max, 0, 1);
       const label = t.name + ' ' + Math.ceil(t.hp);
-      if (this._tgt !== label) { this._tgt = label; dom.target.innerHTML = label + '<i><b></b></i>'; }
-      const bar = dom.target.querySelector('b');
-      if (bar) bar.style.transform = 'scaleX(' + pct.toFixed(3) + ')';
+      if (this._tgt !== label) { this._tgt = label; this._tgtEl.textContent = label; }
+      this._tgtBar.style.transform = 'scaleX(' + clamp(t.hp / t.max, 0, 1).toFixed(3) + ')';
     } else if (this._tgt !== '') {
       this._tgt = '';
       dom.target.classList.remove('on');
-      dom.target.innerHTML = '';
     }
     /* active power-up chips */
     const chips = [];
@@ -2740,8 +2745,8 @@ class Game {
     const c = ctx;
     const rw = IN.touch ? 108 : 152;
     const rh = rw * (ARENA.h / ARENA.w);
-    const rx = IN.touch ? 16 : this.w - rw - 18;
-    const ry = IN.touch ? 108 : this.h - rh - 22;
+    const rx = IN.touch ? 12 : this.w - rw - 18;
+    const ry = IN.touch ? 12 : this.h - rh - 22;
     const sx = rw / ARENA.w, sy = rh / ARENA.h;
     c.save();
     c.globalAlpha = 0.9;
@@ -2911,10 +2916,17 @@ window.addEventListener('keyup', (e) => {
 });
 
 canvas.addEventListener('pointerdown', (e) => {
-  if (e.pointerType === 'touch') { IN.touch = true; document.body.classList.add('touch'); }
-  else { IN.mouseSeen = true; IN.mx = e.clientX; IN.my = e.clientY; }
+  if (e.pointerType === 'touch') {
+    if (!IN.touch) { IN.touch = true; document.body.classList.add('touch'); }
+    /* tap anywhere on the arena to break orbit — the one-action core of the game */
+    if (game.state === 'play' && game.ship.state === 'orbit') { launchOrStart(); e.preventDefault(); return; }
+    if (game.state === 'menu' || (game.state === 'over' && performance.now() - game.overAt > 1000)) { launchOrStart(); }
+    e.preventDefault();
+    return;
+  }
+  IN.mouseSeen = true; IN.mx = e.clientX; IN.my = e.clientY;
   if (e.button === 2) { IN.missile = true; }
-  else if (!IN.touch) { IN.fire = true; }
+  else { IN.fire = true; }
   e.preventDefault();
 });
 window.addEventListener('pointerup', (e) => {
@@ -2944,8 +2956,10 @@ hold(dom.tFire, () => { IN.fire = true; }, () => { IN.fire = false; });
 hold(dom.tBoost, () => { IN.boost = true; }, () => { IN.boost = false; });
 hold(dom.tMsl, () => { IN.missile = true; }, () => { IN.missile = false; if (game.state === 'play') game.ship.fireMissile(); });
 dom.tLaunch.addEventListener('pointerdown', (e) => { e.preventDefault(); dom.tLaunch.classList.add('on'); launchOrStart(); });
-dom.tLaunch.addEventListener('pointerup', () => dom.tLaunch.classList.remove('on'));
-dom.tLaunch.addEventListener('pointercancel', () => dom.tLaunch.classList.remove('on'));
+const tLaunchOff = () => dom.tLaunch.classList.remove('on');
+dom.tLaunch.addEventListener('pointerup', tLaunchOff);
+dom.tLaunch.addEventListener('pointercancel', tLaunchOff);
+dom.tLaunch.addEventListener('pointerleave', tLaunchOff);
 
 dom.startBtn.addEventListener('click', (e) => { e.stopPropagation(); game.start(); });
 dom.restartBtn.addEventListener('click', (e) => { e.stopPropagation(); game.start(); });
