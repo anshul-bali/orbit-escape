@@ -1,0 +1,16 @@
+# dependencies / tooling
+node_modules/
+.vercel/
+.turbo/
+
+# logs & os cruft
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# editor
+.vscode/
+.idea/
+*.swp
