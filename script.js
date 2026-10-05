@@ -728,7 +728,7 @@ class Pickup {
     }
     g.closePath(); g.fill(); g.stroke();
     g.fillStyle = 'hsla(' + D.hue + ',100%,88%,' + blink + ')';
-    g.font = '700 11px ' + FONT;
+    g.font = wfont(700, 11);
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(this.power ? this.power[0] : D.glyph, 0, 0.5);
     g.textAlign = 'left'; g.textBaseline = 'alphabetic';
@@ -1088,7 +1088,7 @@ class Enemy {
       g.fillStyle = 'hsl(' + (this.boss ? 340 : 20) + ',95%,58%)';
       g.fillRect(x, y, w * clamp(this.hp / this.max, 0, 1), h);
       if (this.boss) {
-        g.font = '600 10px ' + FONT;
+        g.font = wfont(600, 10);
         g.fillStyle = 'rgba(255,255,255,0.8)';
         g.textAlign = 'center';
         g.fillText(this.name, this.x, y - 5);
@@ -1626,6 +1626,12 @@ class Game {
     this.resize();
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('orientationchange', () => setTimeout(() => this.resize(), 240));
+    /* mobile browser chrome shrinks the visible viewport without a window
+       resize; the touch controls must follow it or they land under the toolbar */
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => this.resize());
+      window.visualViewport.addEventListener('scroll', () => this.resize());
+    }
     document.addEventListener('visibilitychange', () => {
       this.last = performance.now();
       if (document.hidden && this.state === 'play') this.setPaused(true);
@@ -1637,14 +1643,19 @@ class Game {
 
   /* ---------- viewport ---------- */
   resize() {
-    const w = window.innerWidth, h = window.innerHeight;
+    const vv = window.visualViewport;
+    const w = Math.max(1, Math.round(vv ? vv.width : window.innerWidth));
+    const h = Math.max(1, Math.round(vv ? vv.height : window.innerHeight));
+    this.w = w; this.h = h;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.w = w; this.h = h; this.dpr = dpr;
+    this.dpr = dpr;
     canvas.width = Math.floor(w * dpr);
     canvas.height = Math.floor(h * dpr);
     canvas.style.width = w + 'px';
     canvas.style.height = h + 'px';
-    this.cam.base = clamp(Math.min(w, h) / 900, 0.62, 1.05);
+    /* Zoom is anchored to how much arena you need to see, not to the smaller
+       screen edge: a phone must still show the lane to the next planet. */
+    this.cam.base = clamp(Math.min(w / 1000, h / 700), 0.48, 1.05);
     this.cam.zoom = this.cam.base;
     this.cam.update(0.001);
     if (!IN.mouseSeen) { IN.mx = IN.cx = w / 2; IN.my = IN.cy = h / 2; }
@@ -2676,14 +2687,14 @@ class Game {
     c.lineWidth = 1.4;
     c.beginPath(); c.arc(p.x, p.y - p.orbitR - 16, 8, 0, TAU); c.stroke();
     c.fillStyle = 'hsla(' + hue + ',' + sat + '%,80%,0.95)';
-    c.font = '700 10px ' + FONT;
+    c.font = wfont(700, 10);
     c.textAlign = 'center';
     c.fillText(F.symbol, p.x, p.y - p.orbitR - 12.5);
-    c.font = '400 9.5px ' + FONT;
+    c.font = wfont(400, 9.5);
     c.fillStyle = 'hsla(' + hue + ',' + sat + '%,80%,0.5)';
     c.fillText(p.label + (p.kind !== 'normal' ? ' · ' + KIND[p.kind].label : '') + (p.cleared ? ' · SECURED' : ''), p.x, p.y + p.orbitR + 22);
     if (p.visited || this.state !== 'menu') {
-      c.font = '400 10.5px ' + FONT;
+      c.font = wfont(400, 10.5);
       c.fillStyle = 'hsla(' + hue + ',' + sat + '%,84%,0.42)';
       c.fillText(p.name.toUpperCase(), p.x, p.y + p.orbitR + 35);
     }
@@ -2735,7 +2746,7 @@ class Game {
     for (const q of this.popups) {
       const t = clamp(q.life / q.max, 0, 1);
       const a = t > 0.8 ? (1 - t) / 0.2 : Math.min(1, t / 0.4);
-      c.font = '600 ' + q.size + 'px ' + FONT;
+      c.font = wfont(600, q.size);
       c.fillStyle = 'hsla(' + q.hue + ',95%,80%,' + (a * 0.95).toFixed(3) + ')';
       c.fillText(q.text, q.x, q.y);
     }
@@ -2835,6 +2846,7 @@ class Game {
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drawBackground();
     const z = this.cam.zoom;
+    TS = clamp(1 / z, 1, 2.1);
     c.save();
     c.translate(this.w / 2 + this.cam.kx, this.h / 2 + this.cam.ky);
     c.scale(z, z);
@@ -2873,6 +2885,10 @@ class Game {
 }
 
 const FONT = '"Segoe UI", Inter, system-ui, -apple-system, sans-serif';
+/* world-space text is drawn inside the camera transform; TS keeps it legible
+   when the arena is zoomed out on a small screen */
+let TS = 1;
+const wfont = (weight, px) => weight + ' ' + (px * TS).toFixed(1) + 'px ' + FONT;
 
 /* ------------------------------------------------------------
    15. boot + input wiring
